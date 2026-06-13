@@ -45,10 +45,16 @@ self.addEventListener('fetch', (event) => {
       .then((response) => {
         // Cache dynamic static assets
         if (response && response.status === 200 && response.type === 'basic') {
-          const responseToCache = response.clone();
-          caches.open(CACHE_NAME).then((cache) => {
-            cache.put(event.request, responseToCache);
-          });
+          const contentType = response.headers.get('content-type');
+          const isHtml = contentType && contentType.includes('text/html');
+          const isPageRequest = event.request.url === self.location.origin + '/' || event.request.url.endsWith('/index.html') || !event.request.url.includes('.');
+
+          if (!isHtml || isPageRequest) {
+            const responseToCache = response.clone();
+            caches.open(CACHE_NAME).then((cache) => {
+              cache.put(event.request, responseToCache);
+            });
+          }
         }
         return response;
       })

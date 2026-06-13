@@ -1244,7 +1244,12 @@ async function startServer() {
   await testFirebaseConnection();
   await seedFirestoreIfNeeded();
 
-  if (process.env.NODE_ENV !== 'production') {
+  const isProduction = process.env.NODE_ENV === 'production' || __dirname.includes('dist') || !fs.existsSync(path.join(process.cwd(), 'server.ts'));
+  const distPath = __dirname.includes('dist') 
+    ? __dirname 
+    : (fs.existsSync(path.join(process.cwd(), 'dist')) ? path.join(process.cwd(), 'dist') : __dirname);
+
+  if (!isProduction) {
     console.log("Configuring Vite Development Server Middleware...");
     const vite = await createViteServer({
       server: { middlewareMode: true },
@@ -1252,10 +1257,13 @@ async function startServer() {
     });
     app.use(vite.middlewares);
   } else {
-    console.log("Serving build outputs in static mode...");
-    const distPath = path.join(process.cwd(), 'dist');
+    console.log("Serving build outputs in static mode from:", distPath);
     app.use(express.static(distPath));
     app.get('*', (req, res) => {
+      const ext = path.extname(req.path);
+      if (ext && ext !== '.html') {
+        return res.status(404).send('Not Found');
+      }
       res.sendFile(path.join(distPath, 'index.html'));
     });
   }
