@@ -1,0 +1,80 @@
+{
+  "users": [
+    {
+      "id": "usr_admin_1",
+      "nom": "Cyr",
+      "prenom": "Kahiba",
+      "email": "kahibacyr@gmail.com",
+      "matricule": "ADM-001",
+      "role": "admin",
+      "photo_url": "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&h=150&fit=crop",
+      "password_hash": "presence123",
+      "created_at": "2026-06-12T12:42:34.472Z"
+    },
+    {
+      "id": "usr_admin_2",
+      "nom": "Admin",
+      "prenom": "SaaS",
+      "email": "admin@demo.com",
+      "matricule": "ADM-002",
+      "role": "admin",
+      "photo_url": "https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?w=150&h=150&fit=crop",
+      "password_hash": "admin123",
+      "created_at": "2026-06-12T12:42:34.472Z"
+    },
+    {
+      "id": "usr_emp_1",
+      "nom": "Dupont",
+      "prenom": "Jean",
+      "email": "jean.dupont@demo.com",
+      "matricule": "EMP-001",
+      "role": "employee",
+      "photo_url": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&h=150&fit=crop",
+      "password_hash": "employee123",
+      "created_at": "2026-06-12T12:42:34.472Z"
+    },
+    {
+      "id": "usr_emp_2",
+      "nom": "Curie",
+      "prenom": "Marie",
+      "email": "marie.curie@demo.com",
+      "matricule": "EMP-002",
+      "role": "employee",
+      "photo_url": "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&h=150&fit=crop",
+      "password_hash": "employee123",
+      "created_at": "2026-06-12T12:42:34.472Z"
+    },
+    {
+      "id": "usr_emp_3",
+      "nom": "Dubois",
+      "prenom": "Thomas",
+      "email": "thomas.dubois@demo.com",
+      "matricule": "EMP-003",
+      "role": "employee",
+      "photo_url": "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&h=150&fit=crop",
+      "password_hash": "employee123",
+      "created_at": "2026-06-12T12:42:34.473Z"
+    }
+  ],
+  "presences": [],
+  "stations": [
+    {
+      "id": "st_1",
+      "nom_station": "Station Unique de Pointage",
+      "token_access": "tok_main_entrance",
+      "active": true,
+      "created_at": "2026-06-12T12:42:34.473Z"
+    }
+  ],
+  "qr_tokens": [],
+  "access_codes": [
+    {
+      "id": "ac_1",
+      "code": "123456",
+      "station_id": "st_1",
+      "expires_at": "2026-06-13T12:42:34.473Z",
+      "is_active": true,
+      "created_at": "2026-06-12T12:42:34.473Z"
+    }
+  ]
+}

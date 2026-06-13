@@ -1,0 +1,6 @@
+{
+  "name": "QR Code Attendance",
+  "description": "Système de présence par QR Code avec dashboard d'administration en temps réel, interfaces pour employés et station QR sécurisée.",
+  "requestFramePermissions": ["camera"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

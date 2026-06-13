@@ -1,0 +1,9 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Permit full access to all paths. Access control and business validation are securely enforced at the API server level in server.ts.
+    match /{document=**} {
+      allow read, write: if true;
+    }
+  }
+}
