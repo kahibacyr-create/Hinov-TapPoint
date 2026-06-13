@@ -2,13 +2,37 @@ import express from 'express';
 import path from 'path';
 import fs from 'fs';
 import { createServer as createViteServer } from 'vite';
-import { initializeApp, getApps, getApp } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
+import { initializeApp, getApps, getApp } from 'firebase/app';
+import { 
+  getFirestore, 
+  collection as firestoreCollection, 
+  doc as firestoreDoc, 
+  getDoc as firestoreGetDoc, 
+  getDocs as firestoreGetDocs, 
+  setDoc as firestoreSetDoc, 
+  updateDoc as firestoreUpdateDoc, 
+  deleteDoc as firestoreDeleteDoc, 
+  query as firestoreQuery, 
+  where as firestoreWhere,
+  limit as firestoreLimit
+} from 'firebase/firestore';
 
-// Load Firebase Config dynamically
+// Load Firebase Config dynamically from process env or local file
 const configPath = path.join(process.cwd(), 'firebase-applet-config.json');
 let firebaseConfig: any = {};
-if (fs.existsSync(configPath)) {
+
+if (process.env.FIREBASE_PROJECT_ID || process.env.projectId) {
+  firebaseConfig = {
+    projectId: process.env.FIREBASE_PROJECT_ID || process.env.projectId,
+    appId: process.env.FIREBASE_APP_ID || process.env.appId,
+    apiKey: process.env.FIREBASE_API_KEY || process.env.apiKey,
+    authDomain: process.env.FIREBASE_AUTH_DOMAIN || process.env.authDomain,
+    storageBucket: process.env.FIREBASE_STORAGE_BUCKET || process.env.storageBucket,
+    messagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID || process.env.messagingSenderId,
+    measurementId: process.env.FIREBASE_MEASUREMENT_ID || process.env.measurementId,
+    firestoreDatabaseId: process.env.FIREBASE_FIRESTORE_DATABASE_ID || process.env.firestoreDatabaseId || "(default)"
+  };
+} else if (fs.existsSync(configPath)) {
   try {
     firebaseConfig = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
   } catch (err) {
@@ -16,17 +40,17 @@ if (fs.existsSync(configPath)) {
   }
 }
 
-// Initialize Firebase Admin SDK
-if (getApps().length === 0) {
-  initializeApp({
-    projectId: firebaseConfig.projectId
-  });
+// Initialize Firebase standard JS SDK
+let firestoreDb: any = null;
+try {
+  const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
+  firestoreDb = firebaseConfig.firestoreDatabaseId && firebaseConfig.firestoreDatabaseId !== "(default)"
+    ? getFirestore(app, firebaseConfig.firestoreDatabaseId)
+    : getFirestore(app);
+  console.log("[Firebase Service] Initialized Firebase standard SDK successfully on server.");
+} catch (e) {
+  console.error("[Firebase Service] Failed to initialize Firebase standard SDK:", e);
 }
-
-// Handle multi-database instances if standard custom ID exists
-const adminDb = firebaseConfig.firestoreDatabaseId && firebaseConfig.firestoreDatabaseId !== "(default)"
-  ? getFirestore(getApp(), firebaseConfig.firestoreDatabaseId)
-  : getFirestore();
 
 const db = "(admin-db-context)";
 const auth = { currentUser: null as any };
@@ -78,12 +102,16 @@ function saveLocalDb() {
 
 async function testFirebaseConnection() {
   try {
+    if (!firestoreDb) {
+      throw new Error("Firestore DB has not been successfully initialized.");
+    }
     console.log("[Database Service] Testing Google Cloud Firestore connectivity...");
-    await adminDb.collection('users').limit(1).get();
+    const q = firestoreQuery(firestoreCollection(firestoreDb, 'users'), firestoreLimit(1));
+    await firestoreGetDocs(q);
     console.log("[Database Service] Google Cloud Firestore connected successfully! Bypassing local DB fallback.");
     useLocalDb = false;
   } catch (err) {
-    console.warn("[Database Service] Google Cloud Firestore connection failed or permissions denied. Falling back to robust Local JSON Database (database.json).");
+    console.warn("[Database Service] Google Cloud Firestore connection failed or permissions denied. Falling back to robust Local JSON Database (database.json).", err);
     useLocalDb = true;
     loadLocalDb();
   }
@@ -94,7 +122,7 @@ function collection(db_ctx: any, path: string) {
   if (useLocalDb) {
     return { type: 'collection', path };
   }
-  return adminDb.collection(path);
+  return firestoreCollection(firestoreDb, path);
 }
 
 function doc(db_ctx: any, path: string, id?: string) {
@@ -102,9 +130,9 @@ function doc(db_ctx: any, path: string, id?: string) {
     return { type: 'document', path, id: id || '' };
   }
   if (id) {
-    return adminDb.collection(path).doc(id);
+    return firestoreDoc(firestoreDb, path, id);
   }
-  return adminDb.doc(path);
+  return firestoreDoc(firestoreDb, path);
 }
 
 async function getDoc(docRef: any) {
@@ -120,12 +148,8 @@ async function getDoc(docRef: any) {
       ref: docRef
     };
   }
-  const snap = await docRef.get();
-  return {
-    exists: () => snap.exists,
-    data: () => snap.data(),
-    ref: docRef
-  };
+  const snap = await firestoreGetDoc(docRef);
+  return snap;
 }
 
 async function getDocs(queryOrCol: any) {
@@ -152,17 +176,8 @@ async function getDocs(queryOrCol: any) {
       forEach: (callback: any) => docs.forEach(callback)
     };
   }
-  const snap = await queryOrCol.get();
-  const docs = snap.docs.map((d: any) => ({
-    id: d.id,
-    data: () => d.data(),
-    ref: d.ref
-  }));
-  return {
-    empty: snap.empty,
-    docs: docs,
-    forEach: (callback: any) => docs.forEach(callback)
-  };
+  const snap = await firestoreGetDocs(queryOrCol);
+  return snap;
 }
 
 async function setDoc(docRef: any, data: any) {
@@ -180,7 +195,7 @@ async function setDoc(docRef: any, data: any) {
     }
     saveLocalDb();
   } else {
-    await docRef.set(data);
+    await firestoreSetDoc(docRef, data);
   }
 }
 
@@ -197,7 +212,7 @@ async function updateDoc(docRef: any, data: any) {
       throw new Error(`Document with ID ${docId} not found in ${colPath}`);
     }
   } else {
-    await docRef.update(data);
+    await firestoreUpdateDoc(docRef, data);
   }
 }
 
@@ -209,7 +224,7 @@ async function deleteDoc(docRef: any) {
     localDb[colPath] = list.filter((item: any) => item.id !== docId);
     saveLocalDb();
   } else {
-    await docRef.delete();
+    await firestoreDeleteDoc(docRef);
   }
 }
 
@@ -227,11 +242,7 @@ function query(colRef: any, ...constraints: any[]) {
       constraints: cList
     };
   }
-  let q = colRef;
-  for (const constraint of constraints) {
-    q = constraint(q);
-  }
-  return q;
+  return firestoreQuery(colRef, ...constraints);
 }
 
 function where(field: string, op: any, value: any) {
@@ -249,7 +260,7 @@ function where(field: string, op: any, value: any) {
       });
     };
   }
-  return (q: any) => q.where(field, op, value);
+  return firestoreWhere(field, op, value);
 }
 
 import { v2 as cloudinary } from 'cloudinary';
@@ -302,7 +313,7 @@ function handleFirestoreError(error: unknown, operationType: OperationType, path
 }
 
 const app = express();
-const PORT = 3000;
+const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ limit: '10mb', extended: true }));
