@@ -1,6 +1,6 @@
 import { useState, FormEvent } from 'react';
 import { motion } from 'motion/react';
-import { LogIn, Key, HelpCircle, Shield, User, Smartphone } from 'lucide-react';
+import { LogIn, Key, HelpCircle, Shield, User, Smartphone, Eye, EyeOff } from 'lucide-react';
 
 interface LoginProps {
   onLoginSuccess: (token: string, user: any) => void;
@@ -10,6 +10,7 @@ interface LoginProps {
 export default function Login({ onLoginSuccess, onEnterStationKiosk }: LoginProps) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showLoginPassword, setShowLoginPassword] = useState(false);
   const [stationCode, setStationCode] = useState('');
   const [mode, setMode] = useState<'login' | 'kiosk'>('login');
   const [error, setError] = useState<string | null>(null);
@@ -125,7 +126,8 @@ export default function Login({ onLoginSuccess, onEnterStationKiosk }: LoginProp
             id="logo-brand-img"
             src="https://res.cloudinary.com/dzthrix45/image/upload/q_auto/f_auto/v1781278377/1781276285421_qvyann.png"
             alt="Application Logo"
-            className="w-32 h-32 object-contain mb-6"
+            className="w-32 h-32 object-contain mb-6 mx-auto"
+            style={{ width: '128px', height: '128px', maxWidth: '128px' }}
             animate={{ scale: [1, 1.15, 1] }}
             transition={{
               duration: 2.5,
@@ -158,7 +160,7 @@ export default function Login({ onLoginSuccess, onEnterStationKiosk }: LoginProp
                   mode === 'kiosk' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-900'
                 }`}
               >
-                <Smartphone className="w-4 h-4" /> Station QR Kiosque
+                <Smartphone className="w-4 h-4" /> Station QR
               </button>
             </div>
           )}
@@ -274,17 +276,29 @@ export default function Login({ onLoginSuccess, onEnterStationKiosk }: LoginProp
                 <label id="lbl-password" htmlFor="password-input" className="block text-sm font-medium text-slate-700">
                   Mot de passe
                 </label>
-                <div className="mt-1">
+                <div className="mt-1 relative">
                   <input
                     id="password-input"
                     name="password"
-                    type="password"
+                    type={showLoginPassword ? "text" : "password"}
                     required
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="••••••••"
-                    className="block w-full px-4 py-2.5 bg-white border border-slate-200 rounded-lg text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all sm:text-sm"
+                    className="block w-full pl-4 pr-10 py-2.5 bg-white border border-slate-200 rounded-lg text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all sm:text-sm"
                   />
+                  <button
+                    id="btn-toggle-password-visibility"
+                    type="button"
+                    onClick={() => setShowLoginPassword(!showLoginPassword)}
+                    className="absolute inset-y-0 right-0 flex items-center pr-3 text-slate-400 hover:text-slate-600 focus:outline-none cursor-pointer"
+                  >
+                    {showLoginPassword ? (
+                      <EyeOff className="w-5 h-5" />
+                    ) : (
+                      <Eye className="w-5 h-5" />
+                    )}
+                  </button>
                 </div>
               </div>
 

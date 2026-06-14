@@ -63,6 +63,7 @@ interface LocalDbStore {
   stations: any[];
   qr_tokens: any[];
   access_codes: any[];
+  settings: any[];
   [key: string]: any[];
 }
 
@@ -71,7 +72,8 @@ let localDb: LocalDbStore = {
   presences: [],
   stations: [],
   qr_tokens: [],
-  access_codes: []
+  access_codes: [],
+  settings: []
 };
 
 const localDbPath = path.join(process.cwd(), 'database.json');
@@ -346,6 +348,7 @@ interface DbPresence {
   date: string;
   heure: string;
   created_at: string;
+  late?: boolean;
 }
 
 interface DbStation {
@@ -1087,6 +1090,22 @@ app.get('/api/stations/:id/qr-token', async (req, res) => {
     if (!station.active) {
       return res.status(404).json({ error: 'Station inactive' });
     }
+
+    // Validate service day
+    let service_days = [1, 2, 3, 4, 5];
+    try {
+      const settingsDoc = await getDoc(doc(db, 'settings', 'general'));
+      if (settingsDoc.exists()) {
+        service_days = settingsDoc.data().service_days || service_days;
+      }
+    } catch (e) {
+      console.error("Error reading settings for service day check", e);
+    }
+
+    const todayDay = new Date().getDay();
+    if (!service_days.includes(todayDay)) {
+      return res.status(400).json({ error: "Service fermé : aujourd'hui n'est pas un jour de service." });
+    }
     
     const currentTime = new Date();
     // Fetch qr tokens matching station
@@ -1124,6 +1143,51 @@ app.get('/api/stations/:id/qr-token', async (req, res) => {
     });
   } catch (e) {
     res.status(500).json({ error: 'Erreur QR Token generation' });
+  }
+});
+
+// API ROUTE: Get System Settings
+app.get('/api/settings', async (req, res) => {
+  try {
+    const settingsDoc = await getDoc(doc(db, 'settings', 'general'));
+    if (settingsDoc.exists()) {
+      res.json(settingsDoc.data());
+    } else {
+      const defaultSettings = {
+        id: 'general',
+        service_days: [1, 2, 3, 4, 5], // Monday - Friday
+        heure_pointage: '08:30'
+      };
+      await setDoc(doc(db, 'settings', 'general'), defaultSettings);
+      res.json(defaultSettings);
+    }
+  } catch (e) {
+    res.status(500).json({ error: 'Erreur de chargement des paramètres' });
+  }
+});
+
+// API ROUTE: Update System Settings (Admin Only)
+app.put('/api/settings', authenticate, async (req: any, res) => {
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'Accès interdit: Administrateur requis' });
+  }
+  
+  const { service_days, heure_pointage } = req.body;
+  
+  if (!Array.isArray(service_days) || !heure_pointage) {
+    return res.status(400).json({ error: 'Paramètres invalides (jours de service et heure de pointage requis)' });
+  }
+  
+  try {
+    const updated = {
+      id: 'general',
+      service_days: service_days.map(d => Number(d)),
+      heure_pointage
+    };
+    await setDoc(doc(db, 'settings', 'general'), updated);
+    res.json({ success: true, settings: updated });
+  } catch (e) {
+    res.status(500).json({ error: 'Erreur d\'enregistrement des paramètres' });
   }
 });
 
@@ -1182,6 +1246,26 @@ app.post('/api/presences/scan', authenticate, async (req: any, res) => {
       return res.status(400).json({ error: 'Ce QR Code a expiré. Veuillez scanner un code plus récent.' });
     }
     
+    // Retrieve system settings
+    let service_days = [1, 2, 3, 4, 5];
+    let heure_pointage = '08:30';
+    try {
+      const settingsDoc = await getDoc(doc(db, 'settings', 'general'));
+      if (settingsDoc.exists()) {
+        const sData = settingsDoc.data();
+        service_days = sData.service_days || service_days;
+        heure_pointage = sData.heure_pointage || heure_pointage;
+      }
+    } catch (e) {
+      console.error("Error loading system settings for scan", e);
+    }
+
+    // Verify today is a service day
+    const todayDay = new Date().getDay(); // 0 is Sunday, 1 is Monday ... 6 is Saturday
+    if (!service_days.includes(todayDay)) {
+      return res.status(400).json({ error: "Service fermé : la borne de pointage est inactive aujourd'hui (non-service)." });
+    }
+
     let scanUserId = req.user.id;
     if (req.user.role === 'admin' && target_user_id) {
       scanUserId = target_user_id;
@@ -1211,6 +1295,20 @@ app.post('/api/presences/scan', authenticate, async (req: any, res) => {
     
     const formatterTime = new Date();
     const timeStr = formatterTime.toTimeString().split(' ')[0];
+
+    // Compute lateness for check-ins
+    let isLate = false;
+    if (scanType === 'entry') {
+      const getMinutes = (hStr: string) => {
+        const parts = hStr.split(':');
+        const h = parseInt(parts[0], 10) || 0;
+        const m = parseInt(parts[1], 10) || 0;
+        return h * 60 + m;
+      };
+      if (getMinutes(timeStr) > getMinutes(heure_pointage)) {
+        isLate = true;
+      }
+    }
     
     const newPresence: DbPresence = {
       id: 'pr_' + Math.random().toString(36).substr(2, 9),
@@ -1224,15 +1322,17 @@ app.post('/api/presences/scan', authenticate, async (req: any, res) => {
       type: scanType,
       date: todayStr,
       heure: timeStr,
-      created_at: formatterTime.toISOString()
+      created_at: formatterTime.toISOString(),
+      late: isLate
     };
     
     await setDoc(doc(db, 'presences', newPresence.id), newPresence);
     notifySseClients('presence_added', newPresence);
     
+    const latenessString = scanType === 'entry' ? (isLate ? ' (En retard)' : ' (À l\'heure)') : '';
     res.json({
       success: true,
-      message: `${scanType === 'entry' ? 'Entrée' : 'Sortie'} enregistrée à ${timeStr} pour ${employee.prenom} ${employee.nom}`,
+      message: `${scanType === 'entry' ? 'Entrée' : 'Sortie'} enregistrée à ${timeStr} pour ${employee.prenom} ${employee.nom}${latenessString}`,
       presence: newPresence
     });
   } catch (e) {
@@ -1244,10 +1344,10 @@ async function startServer() {
   await testFirebaseConnection();
   await seedFirestoreIfNeeded();
 
-  const isProduction = process.env.NODE_ENV === 'production' || __dirname.includes('dist') || !fs.existsSync(path.join(process.cwd(), 'server.ts'));
-  const distPath = __dirname.includes('dist') 
-    ? __dirname 
-    : (fs.existsSync(path.join(process.cwd(), 'dist')) ? path.join(process.cwd(), 'dist') : __dirname);
+  const isProduction = process.env.NODE_ENV === 'production' || !fs.existsSync(path.join(process.cwd(), 'server.ts'));
+  const distPath = fs.existsSync(path.join(process.cwd(), 'dist')) 
+    ? path.join(process.cwd(), 'dist') 
+    : process.cwd();
 
   if (!isProduction) {
     console.log("Configuring Vite Development Server Middleware...");

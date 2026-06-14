@@ -24,6 +24,13 @@ export interface Presence {
   date: string; // YYYY-MM-DD
   heure: string; // HH:MM:SS
   created_at: string;
+  late?: boolean;
+}
+
+export interface SystemSettings {
+  id?: string;
+  service_days: number[];
+  heure_pointage: string;
 }
 
 export interface Station {

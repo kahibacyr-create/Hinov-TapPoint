@@ -33,7 +33,8 @@
         "type": { "type": "string", "enum": ["entry", "exit"] },
         "date": { "type": "string" },
         "heure": { "type": "string" },
-        "created_at": { "type": "string", "format": "date-time" }
+        "created_at": { "type": "string", "format": "date-time" },
+        "late": { "type": "boolean" }
       },
       "required": ["id", "user_id", "user_nom", "user_prenom", "user_matricule", "user_photo_url", "station_id", "station_nom", "type", "date", "heure", "created_at"]
     },
@@ -76,6 +77,20 @@
         "created_at": { "type": "string", "format": "date-time" }
       },
       "required": ["id", "code", "station_id", "expires_at", "is_active", "created_at"]
+    },
+    "Settings": {
+      "title": "Settings",
+      "description": "General system configuration for service days and reference hours of check-in.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "service_days": {
+          "type": "array",
+          "items": { "type": "integer" }
+        },
+        "heure_pointage": { "type": "string" }
+      },
+      "required": ["id", "service_days", "heure_pointage"]
     }
   },
   "firestore": {
@@ -98,6 +113,10 @@
     "/access_codes/{accessCodeId}": {
       "schema": "AccessCode",
       "description": "One-time numeric activation codes."
+    },
+    "/settings/{settingId}": {
+      "schema": "Settings",
+      "description": "General portal parameters"
     }
   }
 }

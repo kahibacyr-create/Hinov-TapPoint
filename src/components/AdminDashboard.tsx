@@ -65,6 +65,12 @@ export default function AdminDashboard({ user, onLogout, onUserUpdate }: AdminDa
   const [previewQrToken, setPreviewQrToken] = useState<string | null>(null);
   const [previewCountdown, setPreviewCountdown] = useState(15);
 
+  // System general settings states (service days and check-in reference hour)
+  const [serviceDays, setServiceDays] = useState<number[]>([1, 2, 3, 4, 5]);
+  const [heurePointage, setHeurePointage] = useState<string>("08:30");
+  const [settingsLoading, setSettingsLoading] = useState<boolean>(false);
+  const [settingsSuccess, setSettingsSuccess] = useState<boolean>(false);
+
   // Copy state for dynamic access codes & static access tokens
   const [copiedText, setCopiedText] = useState<Record<string, boolean>>({});
 
@@ -85,10 +91,11 @@ export default function AdminDashboard({ user, onLogout, onUserUpdate }: AdminDa
     try {
       const headers = { 'Authorization': `Bearer ${localStorage.getItem('auth_token')}` };
       
-      const [resUsers, resPresences, resStations] = await Promise.all([
+      const [resUsers, resPresences, resStations, resSettings] = await Promise.all([
         fetch('/api/employees', { headers }),
         fetch('/api/presences', { headers }),
-        fetch('/api/stations', { headers })
+        fetch('/api/stations', { headers }),
+        fetch('/api/settings', { headers })
       ]);
       
       if (resUsers.ok) setEmployees(await resUsers.json());
@@ -97,12 +104,46 @@ export default function AdminDashboard({ user, onLogout, onUserUpdate }: AdminDa
         setPresences(pList.sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()));
       }
       if (resStations.ok) setStations(await resStations.json());
+      if (resSettings.ok) {
+        const sData = await resSettings.json();
+        setServiceDays(sData.service_days || [1, 2, 3, 4, 5]);
+        setHeurePointage(sData.heure_pointage || "08:30");
+      }
       
     } catch (err) {
       console.error(err);
       setErrorMsg("Erreur de synchronisation avec le serveur");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleSaveSettings = async (e: FormEvent) => {
+    e.preventDefault();
+    setSettingsLoading(true);
+    setSettingsSuccess(false);
+    setErrorMsg(null);
+    try {
+      const res = await fetch('/api/settings', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
+        },
+        body: JSON.stringify({
+          service_days: serviceDays,
+          heure_pointage: heurePointage
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      
+      setSettingsSuccess(true);
+      setTimeout(() => setSettingsSuccess(false), 3000);
+    } catch (err: any) {
+      setErrorMsg(err.message || "Erreur de mise à jour des paramètres");
+    } finally {
+      setSettingsLoading(false);
     }
   };
 
@@ -470,10 +511,13 @@ export default function AdminDashboard({ user, onLogout, onUserUpdate }: AdminDa
     }
   };
 
-  // Stats computation
-  const uniqueUsersToday = new Set(presences.map(p => p.user_id)).size;
-  const arrivalsCount = presences.filter(p => p.type === 'entry').length;
-  const departuresCount = presences.filter(p => p.type === 'exit').length;
+  // Stats computation (Filtered strictly by the current day to auto-reset after each service day)
+  const todayStr = new Date().toISOString().split('T')[0];
+  const todayPresences = presences.filter(p => p.date === todayStr);
+
+  const uniqueUsersToday = new Set(todayPresences.map(p => p.user_id)).size;
+  const arrivalsCount = todayPresences.filter(p => p.type === 'entry').length;
+  const departuresCount = todayPresences.filter(p => p.type === 'exit').length;
 
   // Filtered employees list
   const filteredEmployees = employees.filter(emp => {
@@ -516,7 +560,7 @@ export default function AdminDashboard({ user, onLogout, onUserUpdate }: AdminDa
             />
             <div>
               <h1 className="text-white font-bold text-base leading-tight">Admin Portal</h1>
-              <p className="text-slate-400 text-xs">Système Pointage</p>
+              <p className="text-slate-400 text-xs font-semibold">HINOV TapPoinT</p>
             </div>
           </div>
           {/* Close button for mobile screen menu */}
@@ -763,14 +807,14 @@ export default function AdminDashboard({ user, onLogout, onUserUpdate }: AdminDa
                   </div>
 
                   <div className="space-y-4 min-h-[300px]">
-                    {presences.length === 0 ? (
+                    {todayPresences.length === 0 ? (
                       <div className="flex flex-col items-center justify-center h-64 text-slate-400 space-y-2">
                         <Bell className="w-12 h-12 text-slate-200 animate-bounce" />
                         <p className="text-sm font-sans text-slate-500 text-center">Aucun passage enregistré aujourd'hui.</p>
                         <p className="text-xs text-slate-400">Les passages apparaîtront ici dès qu'un employé scanne un QR.</p>
                       </div>
                     ) : (
-                      presences.slice(0, 8).map((presence, idx) => (
+                      todayPresences.slice(0, 8).map((presence, idx) => (
                         <div 
                           key={presence.id} 
                           id={`live-row-${presence.id}`}
@@ -798,6 +842,13 @@ export default function AdminDashboard({ user, onLogout, onUserUpdate }: AdminDa
                             }`}>
                               {presence.type === 'entry' ? 'ENTRÉE' : 'SORTIE'}
                             </span>
+                            {presence.type === 'entry' && (
+                              <div className={`text-[10px] font-bold uppercase tracking-wider mt-1 ${
+                                presence.late ? 'text-rose-600' : 'text-emerald-600'
+                              }`}>
+                                {presence.late ? '⚠️ En retard' : '✅ À l\'heure'}
+                              </div>
+                            )}
                             <div className="text-xs text-slate-500 font-semibold font-mono mt-1">{presence.heure}</div>
                           </div>
                         </div>
@@ -981,32 +1032,114 @@ export default function AdminDashboard({ user, onLogout, onUserUpdate }: AdminDa
               
               <div id="station-creator-row" className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 
-                {/* STATION MANAGER LEFT FORM */}
-                <div id="station-form-card" className="bg-white border border-slate-200 p-6 rounded-2xl shadow-sm self-start">
-                  <h3 className="text-md font-bold text-slate-900 pb-4 mb-4 border-b border-indigo-50">
-                    ➕ Créer une Borne Station QR
-                  </h3>
+                {/* STATION MANAGER LEFT FORM & PORTAL SERVICE SETTINGS */}
+                <div className="space-y-6 self-start">
                   
-                  <form onSubmit={handleCreateStation} className="space-y-4">
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-500 mb-1.5">Nom de l'emplacement (Station)</label>
-                      <input
-                        type="text"
-                        value={newStationName}
-                        onChange={(e) => setNewStationName(e.target.value)}
-                        placeholder="Ex: Accueil, Hall B, Cafétéria"
-                        required
-                        className="block w-full text-sm bg-white border border-slate-200 px-3.5 py-2.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      />
-                    </div>
+                  <div id="station-form-card" className="bg-white border border-slate-200 p-6 rounded-2xl shadow-sm">
+                    <h3 className="text-md font-bold text-slate-900 pb-4 mb-4 border-b border-indigo-50">
+                      ➕ Créer une Borne Station QR
+                    </h3>
+                    
+                    <form onSubmit={handleCreateStation} className="space-y-4">
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-500 mb-1.5">Nom de l'emplacement (Station)</label>
+                        <input
+                          type="text"
+                          value={newStationName}
+                          onChange={(e) => setNewStationName(e.target.value)}
+                          placeholder="Ex: Accueil, Hall B, Cafétéria"
+                          required
+                          className="block w-full text-sm bg-white border border-slate-200 px-3.5 py-2.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                      </div>
 
-                    <button 
-                      type="submit" 
-                      className="w-full flex items-center justify-center gap-1.5 py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-sm rounded-lg transition"
-                    >
-                      <Plus className="w-4 h-4" /> Enregistrer Borne
-                    </button>
-                  </form>
+                      <button 
+                        type="submit" 
+                        className="w-full flex items-center justify-center gap-1.5 py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-sm rounded-lg transition"
+                      >
+                        <Plus className="w-4 h-4" /> Enregistrer Borne
+                      </button>
+                    </form>
+                  </div>
+
+                  {/* PORTAL SERVICE SETTINGS CARD */}
+                  <div id="portal-settings-card" className="bg-white border border-slate-200 p-6 rounded-2xl shadow-sm">
+                    <h3 className="text-md font-bold text-slate-900 pb-4 mb-4 border-b border-indigo-50 flex items-center gap-1.5">
+                      ⚙️ Jours & Heure de service
+                    </h3>
+                    
+                    <form onSubmit={handleSaveSettings} className="space-y-5">
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-500 uppercase mb-2">Jours de service actifs</label>
+                        <div className="grid grid-cols-2 gap-2">
+                          {[
+                            { value: 1, label: 'Lundi' },
+                            { value: 2, label: 'Mardi' },
+                            { value: 3, label: 'Mercredi' },
+                            { value: 4, label: 'Jeudi' },
+                            { value: 5, label: 'Vendredi' },
+                            { value: 6, label: 'Samedi' },
+                            { value: 0, label: 'Dimanche' }
+                          ].map(day => {
+                            const active = serviceDays.includes(day.value);
+                            return (
+                              <button
+                                type="button"
+                                key={day.value}
+                                onClick={() => {
+                                  if (active) {
+                                    setServiceDays(prev => prev.filter(v => v !== day.value));
+                                  } else {
+                                    setServiceDays(prev => [...prev, day.value]);
+                                  }
+                                }}
+                                className={`text-left px-2.5 py-1.5 rounded-lg border text-xs font-medium transition cursor-pointer flex items-center justify-between ${
+                                  active 
+                                    ? 'bg-indigo-50/70 border-indigo-200 text-indigo-700 font-bold' 
+                                    : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                                }`}
+                              >
+                                <span>{day.label}</span>
+                                {active ? (
+                                  <span className="w-1.5 h-1.5 bg-indigo-600 rounded-full"></span>
+                                ) : (
+                                  <span className="w-1.5 h-1.5 bg-transparent rounded-full"></span>
+                                )}
+                              </button>
+                            );
+                          })}
+                        </div>
+                        <p className="text-[10px] text-slate-400 mt-1.5 leading-relaxed font-sans">La borne QR n'affichera aucun QR en dehors de ces jours.</p>
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-500 uppercase mb-1.5">Heure limite de pointage</label>
+                        <input
+                          type="time"
+                          value={heurePointage}
+                          onChange={(e) => setHeurePointage(e.target.value)}
+                          required
+                          className="block w-full text-xs font-mono bg-white border border-slate-200 px-3.5 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                        <p className="text-[10px] text-slate-400 mt-1.5 leading-relaxed font-sans">Heure de référence pour qualifier l'arrivée (En retard vs À l'heure).</p>
+                      </div>
+
+                      <button
+                        type="submit"
+                        disabled={settingsLoading}
+                        className="w-full flex items-center justify-center gap-1.5 py-2 px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs rounded-lg transition disabled:opacity-50 cursor-pointer"
+                      >
+                        {settingsLoading ? 'Enregistrement...' : 'Sauvegarder les paramètres'}
+                      </button>
+
+                      {settingsSuccess && (
+                        <div className="text-center text-[10px] font-bold text-emerald-600 bg-emerald-50 py-1.5 rounded-lg border border-emerald-100 animate-fadeIn font-sans">
+                          ✓ Enregistré !
+                        </div>
+                      )}
+                    </form>
+                  </div>
+
                 </div>
 
                 {/* ACTIVE STATIONS LISTINGS */}
@@ -1178,6 +1311,13 @@ export default function AdminDashboard({ user, onLogout, onUserUpdate }: AdminDa
                             }`}>
                               {p.type === 'entry' ? 'ENTRÉE' : 'SORTIE'}
                             </span>
+                            {p.type === 'entry' && (
+                              <span className={`ml-2 inline-block text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                                p.late ? 'bg-rose-100 text-rose-800' : 'bg-emerald-150 text-emerald-800'
+                              }`}>
+                                {p.late ? 'En retard' : 'À l\'heure'}
+                              </span>
+                            )}
                           </td>
                           <td className="px-6 py-3.5 whitespace-nowrap">{p.date}</td>
                           <td className="px-6 py-3.5 whitespace-nowrap font-mono text-slate-500 font-semibold">{p.heure}</td>

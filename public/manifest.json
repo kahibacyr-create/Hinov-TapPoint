@@ -1,6 +1,6 @@
 {
-  "name": "Présence QR Code Portal",
-  "short_name": "Présence QR",
+  "name": "HINOV TapPoinT",
+  "short_name": "TapPoinT",
   "description": "Portail collaborateur et RH d'enregistrement de présence en temps réel",
   "start_url": "/",
   "display": "standalone",

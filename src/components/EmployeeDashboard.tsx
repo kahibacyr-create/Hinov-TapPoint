@@ -359,7 +359,7 @@ export default function EmployeeDashboard({ user, onLogout, onUserUpdate }: Empl
             />
             <div>
               <span className="font-bold text-slate-900 tracking-tight text-xs sm:text-sm md:text-base block">Espace Collaborateur</span>
-              <span className="text-[9px] sm:text-[10px] text-slate-500 font-semibold uppercase tracking-wider block">Portail Personnel</span>
+              <span className="text-[9px] sm:text-[10px] text-blue-600 font-extrabold uppercase tracking-wider block">HINOV TapPoinT</span>
             </div>
           </div>
 
@@ -542,6 +542,13 @@ export default function EmployeeDashboard({ user, onLogout, onUserUpdate }: Empl
                             }`}>
                               {p.type === 'entry' ? 'ENTRÉE' : 'SORTIE'}
                             </span>
+                            {p.type === 'entry' && (
+                              <span className={`ml-2 inline-block font-bold px-2 py-0.5 rounded text-[10px] ${
+                                p.late ? 'bg-rose-50 text-rose-800' : 'bg-emerald-50 text-emerald-800'
+                              }`}>
+                                {p.late ? 'En retard' : 'À l\'heure'}
+                              </span>
+                            )}
                           </td>
                           <td className="px-4 py-3 text-slate-500 font-mono">{p.date}</td>
                           <td className="px-4 py-3 text-slate-900 font-semibold font-mono">{p.heure}</td>
@@ -560,11 +567,20 @@ export default function EmployeeDashboard({ user, onLogout, onUserUpdate }: Empl
                     >
                       <div className="flex justify-between items-start gap-4">
                         <span className="font-bold text-slate-800 text-xs truncate max-w-[170px]">{p.station_nom}</span>
-                        <span className={`inline-block font-bold px-2 py-0.5 rounded text-[9px] tracking-wider shrink-0 ${
-                          p.type === 'entry' ? 'bg-emerald-100 text-emerald-900' : 'bg-amber-100 text-amber-900'
-                        }`}>
-                          {p.type === 'entry' ? 'ENTRÉE' : 'SORTIE'}
-                        </span>
+                        <div id={`mobile-presence-type-${p.id}`} className="flex flex-col items-end gap-1 shrink-0">
+                          <span className={`inline-block font-bold px-2 py-0.5 rounded text-[9px] tracking-wider ${
+                            p.type === 'entry' ? 'bg-emerald-100 text-emerald-900' : 'bg-amber-100 text-amber-900'
+                          }`}>
+                            {p.type === 'entry' ? 'ENTRÉE' : 'SORTIE'}
+                          </span>
+                          {p.type === 'entry' && (
+                            <span className={`inline-block font-bold px-1.5 py-0.5 rounded text-[8px] uppercase ${
+                              p.late ? 'bg-rose-100 text-rose-800' : 'bg-emerald-100 text-emerald-800'
+                            }`}>
+                              {p.late ? 'En retard' : 'À l\'heure'}
+                            </span>
+                          )}
+                        </div>
                       </div>
                       <div className="flex justify-between items-center text-[10.5px] text-slate-500 font-mono pt-2 border-t border-slate-150">
                         <span className="flex items-center gap-1">📅 {p.date}</span>
